@@ -18,11 +18,12 @@ import {Transport} from '../../lib/transport';
 import {Message} from '../../lib/message';
 import * as fs from 'fs';
 
-export class MockTransport implements Transport {
+export class MockTransport implements Transport<null> {
   receivedData: DataView[] = [];
   pendingData: ArrayBuffer = new ArrayBuffer(0);
   pos = 0;
   reject?: (reason: Error) => void;
+  device = null;
 
   async pushFromFile(fileName: string): Promise<void> {
     const textEncoder = new TextEncoder();

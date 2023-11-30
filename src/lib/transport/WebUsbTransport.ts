@@ -14,12 +14,20 @@
  *  limitations under the License.
  */
 
-import {Transport} from './Transport';
-import {hexdump} from '../Helpers';
-import {Options} from '../Options';
+import { Transport } from "./Transport";
+import { hexdump } from "../Helpers";
+import { Options } from "../Options";
 
-const ADB_DEVICE = {classCode: 255, subclassCode: 66, protocolCode: 1} as USBDeviceFilter;
-const FASTBOOT_DEVICE = {classCode: 255, subclassCode: 66, protocolCode: 3} as USBDeviceFilter;
+const ADB_DEVICE = {
+  classCode: 255,
+  subclassCode: 66,
+  protocolCode: 1,
+} as USBDeviceFilter;
+const FASTBOOT_DEVICE = {
+  classCode: 255,
+  subclassCode: 66,
+  protocolCode: 3,
+} as USBDeviceFilter;
 const DEVICE_FILTERS = [ADB_DEVICE, FASTBOOT_DEVICE];
 
 interface DeviceMatch {
@@ -31,15 +39,15 @@ interface DeviceMatch {
 /**
  * An implementation of {@link Transport} using WebUSB as the tranport layer.
  */
-export class WebUsbTransport implements Transport {
+export class WebUsbTransport implements Transport<USBDevice> {
   private constructor(
     readonly device: USBDevice,
     readonly match: DeviceMatch,
     readonly endpointIn: number,
     readonly endpointOut: number,
     readonly options: Options,
-    readonly log = console.log) {
-  }
+    readonly log = console.log
+  ) {}
 
   /**
    *  Releases the interface and closes the connection to the WebUSB device
@@ -56,7 +64,7 @@ export class WebUsbTransport implements Transport {
    */
   async write(data: ArrayBuffer): Promise<void> {
     if (this.options.dump) {
-      hexdump(new DataView(data), '' + this.endpointOut + '==> ');
+      hexdump(new DataView(data), "" + this.endpointOut + "==> ");
     }
 
     await this.device.transferOut(this.endpointOut, data);
@@ -71,7 +79,7 @@ export class WebUsbTransport implements Transport {
   async read(len: number): Promise<DataView> {
     const response = await this.device.transferIn(this.endpointIn, len);
     if (!response.data) {
-      throw new Error('Response didn\'t contain any data');
+      throw new Error("Response didn't contain any data");
     }
     return response.data;
   }
@@ -79,32 +87,60 @@ export class WebUsbTransport implements Transport {
   /**
    * @returns {boolean} true if the connected device is an ADB device.
    */
-	isAdb(): boolean {
-		const match = WebUsbTransport.findMatch(this.device, ADB_DEVICE);
-		return match != null;
-	};
+  isAdb(): boolean {
+    const match = WebUsbTransport.findMatch(this.device, ADB_DEVICE);
+    return match != null;
+  }
 
   /**
    * @returns {boolean} true if the connected device is a Fastboot device.
    */
-	isFastboot(): boolean {
-		const match = WebUsbTransport.findMatch(this.device, FASTBOOT_DEVICE);
-		return match != null;
-  };
+  isFastboot(): boolean {
+    const match = WebUsbTransport.findMatch(this.device, FASTBOOT_DEVICE);
+    return match != null;
+  }
 
   /**
-   * Opens a connection to a WebUSB device
+   * Find connected paired adb devices
+   */
+  static async findAdbDevices(): Promise<USBDevice[]> {
+    const devices = await navigator.usb.getDevices();
+    return devices.filter(
+      (device) => this.findMatch(device, ADB_DEVICE) !== null
+    );
+  }
+
+  /**
+   * Opens a connection to a WebUSB device, requesting a new device
    *
    * @param options
    */
   static async open(options: Options): Promise<WebUsbTransport> {
-    const device = await navigator.usb.requestDevice({filters: DEVICE_FILTERS});
+    const device = await navigator.usb.requestDevice({
+      filters: DEVICE_FILTERS,
+    });
+
+    return await this.openDevice(device, options);
+  }
+
+  /**
+   * Opens a connection to an already paired WebUSB device
+   *
+   * @param device
+   * @param options
+   * @returns
+   */
+  static async openDevice(
+    device: USBDevice,
+
+    options: Options
+  ): Promise<WebUsbTransport> {
     await device.open();
 
     // Find the WebUSB device
     const match = this.findMatch(device, ADB_DEVICE);
     if (!match) {
-      throw new Error('Could not find an ADB device');
+      throw new Error("Could not find an ADB device");
     }
 
     // Select the configuration and claim the interface
@@ -114,27 +150,44 @@ export class WebUsbTransport implements Transport {
     //     match.intf.interfaceNumber, match.alternate.alternateSetting);
 
     // Store the correct endpoints
-    const endpointIn = WebUsbTransport.getEndpointNum(match.alternate.endpoints, 'in');
-    const endpointOut = WebUsbTransport.getEndpointNum(match.alternate.endpoints, 'out');
+    const endpointIn = WebUsbTransport.getEndpointNum(
+      match.alternate.endpoints,
+      "in"
+    );
+    const endpointOut = WebUsbTransport.getEndpointNum(
+      match.alternate.endpoints,
+      "out"
+    );
 
-    const transport = new WebUsbTransport(device, match, endpointIn, endpointOut, options);
+    const transport = new WebUsbTransport(
+      device,
+      match,
+      endpointIn,
+      endpointOut,
+      options
+    );
     if (options.debug) {
-      console.log('Created new Transport: ', transport);
+      console.log("Created new Transport: ", transport);
     }
     return transport;
   }
 
-  private static findMatch(device: USBDevice, filter: USBDeviceFilter): DeviceMatch | null {
+  private static findMatch(
+    device: USBDevice,
+    filter: USBDeviceFilter
+  ): DeviceMatch | null {
     for (const configuration of device.configurations) {
       for (const intf of configuration.interfaces) {
         for (const alternate of intf.alternates) {
-          if (filter.classCode === alternate.interfaceClass &&
-              filter.subclassCode === alternate.interfaceSubclass &&
-              filter.protocolCode === alternate.interfaceProtocol) {
+          if (
+            filter.classCode === alternate.interfaceClass &&
+            filter.subclassCode === alternate.interfaceSubclass &&
+            filter.protocolCode === alternate.interfaceProtocol
+          ) {
             return {
               conf: configuration,
               intf,
-              alternate
+              alternate,
             };
           }
         }
@@ -143,8 +196,12 @@ export class WebUsbTransport implements Transport {
     return null;
   }
 
-  private static getEndpointNum(endpoints: USBEndpoint[], dir: 'in' | 'out', type = 'bulk'): number {
-    for(const ep of endpoints) {
+  private static getEndpointNum(
+    endpoints: USBEndpoint[],
+    dir: "in" | "out",
+    type = "bulk"
+  ): number {
+    for (const ep of endpoints) {
       if (ep.direction === dir && ep.type === type) {
         return ep.endpointNumber;
       }

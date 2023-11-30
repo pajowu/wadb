@@ -24,7 +24,7 @@ export class MessageChannel {
   private active = true;
 
   constructor(
-      readonly transport: Transport,
+      readonly transport: Transport<unknown>,
       readonly options: Options,
       readonly listener: MessageListener) {
     this.readLoop();

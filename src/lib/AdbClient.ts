@@ -14,22 +14,22 @@
  *  limitations under the License.
  */
 
-import {Transport} from './transport/Transport';
-import {Options} from './Options';
-import {Message, MessageChannel, MessageListener} from './message';
-import {KeyStore} from './KeyStore';
-import {privateKeyDump} from './Helpers';
-import {AdbConnectionInformation} from './AdbConnectionInformation';
-import {Stream} from './Stream';
-import {Shell} from './Shell';
-import {AsyncBlockingQueue} from './Queues';
-import {Framebuffer} from './Framebuffer';
+import { Transport } from "./transport/Transport";
+import { Options } from "./Options";
+import { Message, MessageChannel, MessageListener } from "./message";
+import { KeyStore } from "./KeyStore";
+import { privateKeyDump } from "./Helpers";
+import { AdbConnectionInformation } from "./AdbConnectionInformation";
+import { Stream } from "./Stream";
+import { Shell } from "./Shell";
+import { AsyncBlockingQueue } from "./Queues";
+import { Framebuffer } from "./Framebuffer";
 
 const VERSION = 0x01000000;
 const VERSION_NO_CHECKSUM = 0x01000001;
 const MAX_PAYLOAD = 256 * 1024;
 
-const MACHINE_BANNER = 'host::\0';
+const MACHINE_BANNER = "host::\0";
 
 export class AdbClient implements MessageListener {
   private messageChannel: MessageChannel;
@@ -42,10 +42,11 @@ export class AdbClient implements MessageListener {
    * @param {Transport} transport the transport layer.
    */
   constructor(
-    readonly transport: Transport,
+    readonly transport: Transport<unknown>,
     readonly options: Options,
-    readonly keyStore: KeyStore,) {
-      this.messageChannel = new MessageChannel(transport, options, this);
+    readonly keyStore: KeyStore
+  ) {
+    this.messageChannel = new MessageChannel(transport, options, this);
   }
 
   registerStream(stream: Stream): void {
@@ -73,7 +74,12 @@ export class AdbClient implements MessageListener {
 
   async connect(): Promise<AdbConnectionInformation> {
     const version = this.options.useChecksum ? VERSION : VERSION_NO_CHECKSUM;
-    const cnxn = Message.cnxn(version, MAX_PAYLOAD, MACHINE_BANNER, this.options.useChecksum);
+    const cnxn = Message.cnxn(
+      version,
+      MAX_PAYLOAD,
+      MACHINE_BANNER,
+      this.options.useChecksum
+    );
     await this.sendMessage(cnxn); // Send the Message
 
     // Response to connect must be CNXN or AUTH. Ignore different responses until the right one
@@ -81,12 +87,12 @@ export class AdbClient implements MessageListener {
     let response;
     do {
       response = await this.awaitMessage();
-    } while (response.header.cmd !== 'CNXN' && response.header.cmd !== 'AUTH');
+    } while (response.header.cmd !== "CNXN" && response.header.cmd !== "AUTH");
 
     // Server connected
-    if (response.header.cmd === 'CNXN') {
+    if (response.header.cmd === "CNXN") {
       if (!response.data) {
-        throw new Error('Connection doesn\'t have data');
+        throw new Error("Connection doesn't have data");
       }
       return AdbConnectionInformation.fromDataView(response.data);
     }
@@ -94,7 +100,7 @@ export class AdbClient implements MessageListener {
     // Server asked to authenticate
     response = await this.doAuth(response);
     if (!response.data) {
-      throw new Error('Connection doesn\'t have data');
+      throw new Error("Connection doesn't have data");
     }
     return AdbConnectionInformation.fromDataView(response.data);
   }
@@ -103,11 +109,94 @@ export class AdbClient implements MessageListener {
     this.messageChannel.close();
   }
 
+  async shellV2(
+    command: string
+  ): Promise<{ stdout: string; stderr: string; exit: number }> {
+    const stream = await Stream.open(
+      this,
+      `shell,v2,raw:${command}`,
+      this.options
+    );
+    let stdout = "";
+    let stderr = "";
+    let exit = -1;
+    type ShellV2Packet = { cmd: number; length: number; data: ArrayBuffer };
+    function parsePackages(data: ArrayBuffer): ShellV2Packet[] {
+      const pkts: ShellV2Packet[] = [];
+      while (data.byteLength >= 5) {
+        const view = new DataView(data);
+        const packetType = view.getUint8(0);
+        const packetLength = view.getUint32(1, true);
+        console.log("type, length", packetType, packetLength);
+        const packetData = data.slice(5, packetLength + 5);
+        data = data.slice(packetLength + 5);
+        pkts.push({ cmd: packetType, length: packetLength, data: packetData });
+      }
+      return pkts;
+    }
+    while (true) {
+      const cmd = await stream.read();
+      if (cmd.header.cmd == "CLSE") {
+        break;
+      } else {
+        const textDecoder = new TextDecoder();
+        const packets = cmd.data ? parsePackages(cmd.data.buffer) : [];
+        console.log(packets);
+        for (const pkt of packets) {
+          switch (pkt.cmd) {
+            case 0:
+              break;
+            case 1:
+              stdout += textDecoder.decode(pkt.data);
+              break;
+            case 2:
+              stderr += textDecoder.decode(pkt.data);
+              break;
+            case 3:
+              exit = new Uint8Array(pkt.data)[0];
+              break;
+            default:
+              console.warn("unknown cmd", pkt);
+          }
+          await stream.write("OKAY");
+        }
+      }
+    }
+    await stream.close();
+    return { stdout, stderr, exit };
+  }
+
+  async backup(command: string): Promise<Blob> {
+    const stream = await Stream.open(this, `backup:${command}`, this.options);
+    const data = [];
+    while (true) {
+      const cmd = await stream.read();
+      if (cmd.header.cmd == "CLSE") {
+        break;
+      } else {
+        if (cmd?.data?.buffer) {
+          data.push(cmd.data.buffer);
+        }
+        await stream.write("OKAY");
+      }
+    }
+    await stream.close();
+    return new Blob(data);
+  }
+
   async shell(command: string): Promise<string> {
     const stream = await Stream.open(this, `shell:${command}`, this.options);
-    const response = await stream.read();
+    let response = "";
+    while (true) {
+      const cmd = await stream.read();
+      if (cmd.header.cmd == "CLSE") {
+        break;
+      } else {
+        response += cmd.dataAsString();
+      }
+    }
     await stream.close();
-    return response.dataAsString() || '';
+    return response;
   }
 
   async framebuffer(): Promise<Framebuffer> {
@@ -115,12 +204,12 @@ export class AdbClient implements MessageListener {
   }
 
   async interactiveShell(callback?: (result: string) => void): Promise<Shell> {
-    const stream = await Stream.open(this, 'shell:', this.options);
+    const stream = await Stream.open(this, "shell:", this.options);
     return new Shell(stream, callback);
   }
 
   async sync(): Promise<Stream> {
-    return await Stream.open(this, 'sync:', this.options);
+    return await Stream.open(this, "sync:", this.options);
   }
 
   async pull(filename: string): Promise<Blob> {
@@ -131,8 +220,8 @@ export class AdbClient implements MessageListener {
   }
 
   private async doAuth(authResponse: Message): Promise<Message> {
-    if (authResponse.header.cmd !== 'AUTH') {
-      throw new Error('Not an AUTH response');
+    if (authResponse.header.cmd !== "AUTH") {
+      throw new Error("Not an AUTH response");
     }
 
     if (authResponse.header.arg0 !== 1) {
@@ -141,7 +230,7 @@ export class AdbClient implements MessageListener {
     }
 
     if (!authResponse.data) {
-      throw new Error('AUTH message doens\'t contain data');
+      throw new Error("AUTH message doens't contain data");
     }
 
     const token = authResponse.data.buffer;
@@ -149,31 +238,50 @@ export class AdbClient implements MessageListener {
     // Try signing with one of the stored keys
     const keys = await this.keyStore.loadKeys();
     for (const key of keys) {
-      const signed = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key.privateKey, token);
-      const signatureMessage =
-          Message.authSignature(new DataView(signed), this.options.useChecksum);
+      const signed = await crypto.subtle.sign(
+        "RSASSA-PKCS1-v1_5",
+        key.privateKey,
+        token
+      );
+      const signatureMessage = Message.authSignature(
+        new DataView(signed),
+        this.options.useChecksum
+      );
       await this.sendMessage(signatureMessage);
       const signatureResponse = await this.awaitMessage();
-      if (signatureResponse.header.cmd === 'CNXN') {
+      if (signatureResponse.header.cmd === "CNXN") {
+        console.log("keyMatched", key);
         return signatureResponse;
       }
-      console.log('Received message ', signatureResponse, 'from phone');
+      // console.log("Received message ", signatureResponse, "from phone");
     }
-
-    // None of they saved Keys is usable. Create new key
-    const key = await AdbClient.generateKey(this.options.dump, this.options.keySize);
-    await this.keyStore.saveKey(key);
-    const exportedKey = new DataView(await crypto.subtle.exportKey('spki', key.publicKey));
-    const keyMessage = Message.authPublicKey(exportedKey, this.options.useChecksum);
+    let key;
+    if (keys.length === 0) {
+      // None of they saved Keys is usable. Create new key
+      key = await AdbClient.generateKey(
+        this.options.dump,
+        this.options.keySize
+      );
+      await this.keyStore.saveKey(key);
+    } else {
+      key = keys[0];
+    }
+    const exportedKey = new DataView(
+      await crypto.subtle.exportKey("spki", key.publicKey)
+    );
+    const keyMessage = Message.authPublicKey(
+      exportedKey,
+      this.options.useChecksum
+    );
     await this.sendMessage(keyMessage);
 
     if (this.options.debug) {
-      console.log('Waiting for key to be accepted on the device.');
+      console.log("Waiting for key to be accepted on the device.");
     }
-    const keyResponse = await this.awaitMessage()
-    if (keyResponse.header.cmd !== 'CNXN') {
-      console.error('AUTH failed. Phone didn\'t accept key', keyResponse);
-      throw new Error('AUTH failed. Phone didn\'t accept key');
+    const keyResponse = await this.awaitMessage();
+    if (keyResponse.header.cmd !== "CNXN") {
+      console.error("AUTH failed. Phone didn't accept key", keyResponse);
+      throw new Error("AUTH failed. Phone didn't accept key");
     }
     return keyResponse;
   }
@@ -182,14 +290,21 @@ export class AdbClient implements MessageListener {
     await this.messageChannel.write(m);
   }
 
-  static async generateKey(dump: boolean, keySize: number): Promise<CryptoKeyPair> {
+  static async generateKey(
+    dump: boolean,
+    keySize: number
+  ): Promise<CryptoKeyPair> {
     const extractable = dump;
-    const key = await crypto.subtle.generateKey({
-      name: 'RSASSA-PKCS1-v1_5',
-      modulusLength: keySize,
-      publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
-      hash: { name: 'SHA-1' }
-    }, extractable, [ 'sign', 'verify' ])
+    const key = await crypto.subtle.generateKey(
+      {
+        name: "RSASSA-PKCS1-v1_5",
+        modulusLength: keySize,
+        publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
+        hash: { name: "SHA-1" },
+      },
+      extractable,
+      ["sign", "verify"]
+    );
 
     if (dump) {
       await privateKeyDump(key);
