@@ -208,6 +208,12 @@ export class AdbClient implements MessageListener {
 		return result;
 	}
 
+	async *pullGenerator(filename: string): AsyncGenerator<ArrayBuffer> {
+		const syncStream = await this.sync();
+		yield* syncStream.pullGenerator(filename);
+		await syncStream.close();
+	}
+
 	private async doAuth(authResponse: Message): Promise<Message> {
 		if (authResponse.header.cmd !== 'AUTH') {
 			throw new Error('Not an AUTH response');

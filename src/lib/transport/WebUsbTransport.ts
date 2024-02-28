@@ -37,7 +37,7 @@ interface DeviceMatch {
 }
 
 /**
- * An implementation of {@link Transport} using WebUSB as the tranport layer.
+ * An implementation of {@link Transport} using WebUSB as the transport layer.
  */
 export class WebUsbTransport implements Transport<USBDevice> {
 	private constructor(
@@ -74,7 +74,7 @@ export class WebUsbTransport implements Transport<USBDevice> {
 	 * Receives data from the USB device
 	 *
 	 * @param {number} len the length of date to be read
-	 * @returns {Promise<DataView} data read from the device
+	 * @returns {Promise<DataView>} data read from the device
 	 */
 	async read(len: number): Promise<DataView> {
 		const response = await this.device.transferIn(this.endpointIn, len);

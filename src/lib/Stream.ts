@@ -21,6 +21,13 @@ import { toHex32 } from './Helpers';
 import { SyncFrame } from './SyncFrame';
 import { AsyncBlockingQueue } from './Queues';
 
+export class PullError extends Error {
+	constructor(message: string | undefined) {
+		super(message);
+		this.name = 'PullError';
+	}
+}
+
 export class Stream {
 	private static nextId = 1;
 	private messageQueue = new AsyncBlockingQueue<Message>();
@@ -80,6 +87,66 @@ export class Stream {
 	 * @returns {Promise<Blob>} a Blog with the file contents.
 	 */
 	async pull(remotePath: string): Promise<Blob> {
+		const chunks: ArrayBuffer[] = [];
+
+		for await (const chunk of this.pullGenerator(remotePath)) {
+			chunks.push(chunk);
+		}
+		return new Blob(chunks);
+	}
+
+	/**
+	 *
+	 * Retrieves a file from device to a local file. The remote path is the path to
+	 * the file that will be returned.
+	 *
+	 * @param {string} remotePath path to the file to be pulled from the device
+	 * @returns {AsyncGenerator<Uint8Array>} an async generator that yields chunks of the file
+	 */
+	async *pullGenerator(remotePath: string): AsyncGenerator<Uint8Array> {
+		await this.initiatePull(remotePath);
+
+		let syncFrame;
+		let fileDataMessage;
+		const okayMessage = this.newMessage('OKAY');
+
+		do {
+			// header frame
+			fileDataMessage = await this.read();
+			await this.client.sendMessage(okayMessage);
+			syncFrame = SyncFrame.fromDataView(new DataView(fileDataMessage.data!.buffer.slice(0, 8)));
+
+			if (syncFrame.cmd === 'DATA') {
+				// Normal case:
+				// Device first sends us a DATA command with the size of the current chunk and possible the first bytes
+				let chunkLength = syncFrame.byteLength;
+				let chunk = new Uint8Array(fileDataMessage.data!.buffer.slice(8));
+
+				// Receive data until chunk was fully sent
+				while (chunk.byteLength < chunkLength) {
+					let fileDataMessage = await this.read();
+					await this.client.sendMessage(okayMessage);
+					// Join both arrays
+					const newLength = chunk.byteLength + fileDataMessage.data!.byteLength;
+					const newBuffer = new Uint8Array(newLength);
+					newBuffer.set(chunk, 0);
+					newBuffer.set(new Uint8Array(fileDataMessage.data!.buffer), chunk.byteLength);
+					chunk = newBuffer;
+				}
+
+				yield chunk;
+			} else if (syncFrame.cmd === 'FAIL') {
+				// Error case: Device sends failure message
+				let errorMessage = await this.read();
+				await this.client.sendMessage(okayMessage);
+				throw new PullError(errorMessage.dataAsString() || '');
+			} else if (syncFrame.cmd !== 'DONE') {
+				throw Error('Unknown sync command: ' + syncFrame.cmd);
+			}
+		} while (syncFrame.cmd !== 'DONE');
+	}
+
+	private async initiatePull(remotePath: string) {
 		const encoder = new TextEncoder();
 		const encodedFilename = encoder.encode(remotePath);
 
@@ -101,32 +168,6 @@ export class Stream {
 		if (wrteFilenameResponse.header.cmd !== 'OKAY') {
 			throw new Error('WRTE/filename failed: ' + wrteFilenameResponse);
 		}
-
-		const okayMessage = this.newMessage('OKAY');
-		let fileDataMessage = await this.read();
-		await this.client.sendMessage(okayMessage);
-
-		let syncFrame = SyncFrame.fromDataView(new DataView(fileDataMessage.data!.buffer.slice(0, 8)));
-		let buffer = new Uint8Array(fileDataMessage.data!.buffer.slice(8));
-		const chunks: ArrayBuffer[] = [];
-		while (syncFrame.cmd !== 'DONE') {
-			while (syncFrame.byteLength >= buffer.byteLength) {
-				fileDataMessage = await this.read();
-				await this.client.sendMessage(okayMessage);
-
-				// Join both arrays
-				const newLength = buffer.byteLength + fileDataMessage.data!.byteLength;
-				const newBuffer = new Uint8Array(newLength);
-				newBuffer.set(buffer, 0);
-				newBuffer.set(new Uint8Array(fileDataMessage.data!.buffer), buffer.byteLength);
-				buffer = newBuffer;
-			}
-			chunks.push(buffer.slice(0, syncFrame.byteLength).buffer);
-			buffer = buffer.slice(syncFrame.byteLength);
-			syncFrame = SyncFrame.fromDataView(new DataView(buffer.slice(0, 8).buffer));
-			buffer = buffer.slice(8);
-		}
-		return new Blob(chunks);
 	}
 
 	private newMessage(cmd: string, data?: DataView): Message {
