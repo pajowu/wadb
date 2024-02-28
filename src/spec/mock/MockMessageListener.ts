@@ -14,13 +14,13 @@
  *  limitations under the License.
  */
 
-import {AsyncBlockingQueue} from '../../lib/Queues';
-import {Message, MessageListener} from '../../lib/message';
+import { AsyncBlockingQueue } from '../../lib/Queues';
+import { Message, MessageListener } from '../../lib/message';
 
 export class MockMessageListener implements MessageListener {
-  messageQueue = new AsyncBlockingQueue<Message>();
+	messageQueue = new AsyncBlockingQueue<Message>();
 
-  newMessage(msg: Message): void {
-    this.messageQueue.enqueue(msg);
-  }
+	newMessage(msg: Message): void {
+		this.messageQueue.enqueue(msg);
+	}
 }

@@ -14,26 +14,27 @@
  *  limitations under the License.
  */
 
-import {encodeCmd, decodeCmd} from './Helpers';
+import { encodeCmd, decodeCmd } from './Helpers';
 
 export class SyncFrame {
-  constructor(readonly cmd: string, readonly byteLength: number) {
+	constructor(
+		readonly cmd: string,
+		readonly byteLength: number,
+	) {}
 
-  }
+	toDataView(): DataView {
+		const data = new ArrayBuffer(8);
+		const cmd = encodeCmd(this.cmd);
 
-  toDataView(): DataView {
-    const data = new ArrayBuffer(8);
-    const cmd = encodeCmd(this.cmd);
+		const view = new DataView(data);
+		view.setUint32(0, cmd, true);
+		view.setUint32(4, this.byteLength, true);
+		return view;
+	}
 
-    const view = new DataView(data);
-    view.setUint32(0, cmd, true);
-    view.setUint32(4, this.byteLength, true);
-    return view;
-  }
-
-  static fromDataView(dataView: DataView): SyncFrame {
-    const cmd = decodeCmd(dataView.getUint32(0, true));
-    const byteLength = dataView.getUint32(4, true);
-    return new SyncFrame(cmd, byteLength);
-  }
+	static fromDataView(dataView: DataView): SyncFrame {
+		const cmd = decodeCmd(dataView.getUint32(0, true));
+		const byteLength = dataView.getUint32(4, true);
+		return new SyncFrame(cmd, byteLength);
+	}
 }

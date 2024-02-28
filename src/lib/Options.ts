@@ -14,9 +14,9 @@
  *  limitations under the License.
  */
 
- export interface Options {
-   debug: boolean;
-   dump: boolean;
-   useChecksum: boolean;
-   keySize: number;
- }
+export interface Options {
+	debug: boolean;
+	dump: boolean;
+	useChecksum: boolean;
+	keySize: number;
+}

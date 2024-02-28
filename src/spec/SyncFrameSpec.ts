@@ -14,28 +14,28 @@
  *  limitations under the License.
  */
 
-import {encodeCmd} from '../lib/Helpers';
-import {SyncFrame} from '../lib/SyncFrame';
+import { encodeCmd } from '../lib/Helpers';
+import { SyncFrame } from '../lib/SyncFrame';
 
 describe('SyncFrame', () => {
-  describe('#fromDataView', () => {
-    it('Reads a SyncFrame from a DataView', () => {
-      const dataView = new DataView(new ArrayBuffer(8));
-      dataView.setUint32(0, encodeCmd('WRTE'), true);
-      dataView.setUint32(4, 256, true);
-      const syncFrame = SyncFrame.fromDataView(dataView);
-      expect(syncFrame.cmd).toBe('WRTE');
-      expect(syncFrame.byteLength).toBe(256);
-    });
-  });
+	describe('#fromDataView', () => {
+		it('Reads a SyncFrame from a DataView', () => {
+			const dataView = new DataView(new ArrayBuffer(8));
+			dataView.setUint32(0, encodeCmd('WRTE'), true);
+			dataView.setUint32(4, 256, true);
+			const syncFrame = SyncFrame.fromDataView(dataView);
+			expect(syncFrame.cmd).toBe('WRTE');
+			expect(syncFrame.byteLength).toBe(256);
+		});
+	});
 
-  describe('#toDataView', () => {
-    it('Writes a SyncFrame to a DataView', () => {
-      const syncFrame = new SyncFrame('WRTE', 256);
-      const dataView = syncFrame.toDataView();
-      const encodedCmd = encodeCmd('WRTE');
-      expect(dataView.getUint32(0, true)).toBe(encodedCmd);
-      expect(dataView.getUint32(4, true)).toBe(256);
-    });
-  })
+	describe('#toDataView', () => {
+		it('Writes a SyncFrame to a DataView', () => {
+			const syncFrame = new SyncFrame('WRTE', 256);
+			const dataView = syncFrame.toDataView();
+			const encodedCmd = encodeCmd('WRTE');
+			expect(dataView.getUint32(0, true)).toBe(encodedCmd);
+			expect(dataView.getUint32(4, true)).toBe(256);
+		});
+	});
 });

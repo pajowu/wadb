@@ -18,16 +18,16 @@
  * A transport layer for data. Implementations must provide a read and write method.
  */
 export interface Transport<T> {
-  device: T;
-  /**
-   * Writes data to the transport layer.
-   * @param {DataView} data the data to be written to the layer.
-   */
-  write(data: ArrayBuffer): Promise<void>;
+	device: T;
+	/**
+	 * Writes data to the transport layer.
+	 * @param {DataView} data the data to be written to the layer.
+	 */
+	write(data: ArrayBuffer): Promise<void>;
 
-  /**
-   * Reands `len` bytes from the transport layer.
-   * @param {number} len the number of bytes to read.
-   */
-  read(len: number): Promise<DataView>;
+	/**
+	 * Reands `len` bytes from the transport layer.
+	 * @param {number} len the number of bytes to read.
+	 */
+	read(len: number): Promise<DataView>;
 }

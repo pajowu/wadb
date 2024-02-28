@@ -14,52 +14,48 @@
  *  limitations under the License.
  */
 
-import { AdbClient } from "../lib/AdbClient";
-import { MockTransport } from "./mock/MockTransport";
-import { MockKeyStore } from "./mock/MockKeyStore";
-import { Options } from "../lib/Options";
+import { AdbClient } from '../lib/AdbClient';
+import { MockTransport } from './mock/MockTransport';
+import { MockKeyStore } from './mock/MockKeyStore';
+import { Options } from '../lib/Options';
 
 const crypto = new Crypto();
 
-describe("AdbClient", () => {
-  const keyStore = new MockKeyStore();
-  const options = {
-    debug: false,
-    dump: false,
-    useChecksum: false,
-    keySize: 2048,
-  } as Options;
+describe('AdbClient', () => {
+	const keyStore = new MockKeyStore();
+	const options = {
+		debug: false,
+		dump: false,
+		useChecksum: false,
+		keySize: 2048,
+	} as Options;
 
-  describe("#connect", () => {
-    // Node doesn't have a global btoa function. We patch it here for the test.
-    globalThis.btoa = (input: string): string => {
-      return Buffer.from(input).toString("base64");
-    };
-    // Polyfills the browser crypto
-    globalThis.crypto = crypto;
+	describe('#connect', () => {
+		// Node doesn't have a global btoa function. We patch it here for the test.
+		globalThis.btoa = (input: string): string => {
+			return Buffer.from(input).toString('base64');
+		};
+		// Polyfills the browser crypto
+		globalThis.crypto = crypto;
 
-    let transport: MockTransport;
+		let transport: MockTransport;
 
-    beforeEach(() => {
-      transport = new MockTransport();
-    });
+		beforeEach(() => {
+			transport = new MockTransport();
+		});
 
-    it("Server doesn't request AUTH and responds with CNXN", async () => {
-      await transport.pushFromFile(
-        "src/spec/data/messages/connect/connect_simple.json"
-      );
-      const adbClient = new AdbClient(transport, options, keyStore);
-      const adbDeviceInfo = await adbClient.connect();
-      expect(adbDeviceInfo).toBeDefined();
-    });
+		it("Server doesn't request AUTH and responds with CNXN", async () => {
+			await transport.pushFromFile('src/spec/data/messages/connect/connect_simple.json');
+			const adbClient = new AdbClient(transport, options, keyStore);
+			const adbDeviceInfo = await adbClient.connect();
+			expect(adbDeviceInfo).toBeDefined();
+		});
 
-    it("Server responds with AUTH and then CNXN", async () => {
-      await transport.pushFromFile(
-        "src/spec/data/messages/connect/connect_auth_public_key.json"
-      );
-      const adbClient = new AdbClient(transport, options, keyStore);
-      const adbDeviceInfo = await adbClient.connect();
-      expect(adbDeviceInfo).toBeDefined();
-    });
-  });
+		it('Server responds with AUTH and then CNXN', async () => {
+			await transport.pushFromFile('src/spec/data/messages/connect/connect_auth_public_key.json');
+			const adbClient = new AdbClient(transport, options, keyStore);
+			const adbDeviceInfo = await adbClient.connect();
+			expect(adbDeviceInfo).toBeDefined();
+		});
+	});
 });

@@ -14,68 +14,70 @@
  *  limitations under the License.
  */
 
-import {Stream} from './Stream';
-import {Message} from './message';
+import { Stream } from './Stream';
+import { Message } from './message';
 
 type callbackFunction = (text: string) => void;
 
 export class Shell {
-  private textDecoder = new TextDecoder();
-  private textEncoder = new TextEncoder();
-  private messageListener: ((message: Message) => void)[] = [];
-  private closed = false;
+	private textDecoder = new TextDecoder();
+	private textEncoder = new TextEncoder();
+	private messageListener: ((message: Message) => void)[] = [];
+	private closed = false;
 
-  constructor(readonly stream: Stream, readonly callbackFunction?: callbackFunction) {
-    this.loopRead();
-  }
+	constructor(
+		readonly stream: Stream,
+		readonly callbackFunction?: callbackFunction,
+	) {
+		this.loopRead();
+	}
 
-  private async loopRead(): Promise<void> {
-    try {
-      let message;
-      do {
-        message = await this.stream.read();
+	private async loopRead(): Promise<void> {
+		try {
+			let message;
+			do {
+				message = await this.stream.read();
 
-        if (message.header.cmd === 'WRTE') {
-          this.stream.write('OKAY');
-          const data = this.textDecoder.decode(message.data!);
-          if (this.callbackFunction) {
-            this.callbackFunction(data);
-          }
-        }
+				if (message.header.cmd === 'WRTE') {
+					this.stream.write('OKAY');
+					const data = this.textDecoder.decode(message.data!);
+					if (this.callbackFunction) {
+						this.callbackFunction(data);
+					}
+				}
 
-        // Resolve Messages waiting for this event
-        for (const listener of this.messageListener) {
-          listener(message);
-        }
+				// Resolve Messages waiting for this event
+				for (const listener of this.messageListener) {
+					listener(message);
+				}
+			} while (!this.closed);
+		} catch (e) {
+			console.error('loopRead crashed', e);
+		}
+		this.stream.client.unregisterStream(this.stream);
+	}
 
-      } while (!this.closed)
-    } catch(e) {
-      console.error('loopRead crashed', e);
-    }
-    this.stream.client.unregisterStream(this.stream);
-  }
+	private waitForMessage(cmd: string): Promise<Message> {
+		return new Promise<Message>((resolve) => {
+			const callback = (message: Message): void => {
+				if (message.header.cmd === cmd) {
+					const pos = this.messageListener.indexOf(callback);
+					this.messageListener.splice(pos, 1);
+					resolve(message);
+				}
+			};
+			this.messageListener.push(callback);
+		});
+	}
 
-  private waitForMessage(cmd: string): Promise<Message> {
-    return new Promise<Message>(resolve => {
-      const callback = (message: Message): void => {
-        if (message.header.cmd === cmd) {
-          const pos = this.messageListener.indexOf(callback);
-          this.messageListener.splice(pos, 1);
-          resolve(message);
-        }
-      };
-      this.messageListener.push(callback);
-    });
-  }
+	async write(command: string): Promise<void> {
+		const data = this.textEncoder.encode(command);
+		await this.stream.write('WRTE', new DataView(data.buffer));
+		await this.waitForMessage('OKAY');
+	}
 
-  async write(command: string): Promise<void> {
-    const data = this.textEncoder.encode(command);
-    await this.stream.write('WRTE', new DataView(data.buffer));
-    await this.waitForMessage('OKAY');
-  }
-
-  async close(): Promise<void> {
-    this.closed = true;
-    await this.write('CLSE');
-  }
+	async close(): Promise<void> {
+		this.closed = true;
+		await this.write('CLSE');
+	}
 }

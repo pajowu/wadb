@@ -14,64 +14,65 @@
  *  limitations under the License.
  */
 
-import {Transport} from '../transport';
-import {Message} from './Message';
-import {MessageHeader} from './MessageHeader';
-import {Options} from '../Options';
-import {MessageListener} from './MessageListener';
+import { Transport } from '../transport';
+import { Message } from './Message';
+import { MessageHeader } from './MessageHeader';
+import { Options } from '../Options';
+import { MessageListener } from './MessageListener';
 
 export class MessageChannel {
-  private active = true;
+	private active = true;
 
-  constructor(
-      readonly transport: Transport<unknown>,
-      readonly options: Options,
-      readonly listener: MessageListener) {
-    this.readLoop();
-  }
+	constructor(
+		readonly transport: Transport<unknown>,
+		readonly options: Options,
+		readonly listener: MessageListener,
+	) {
+		this.readLoop();
+	}
 
-  private async readLoop(): Promise<void> {
-    let message: Message;
-    do {
-      message = await this.read();
-      if (this.options.debug) {
-        console.log('<<<', message);
-      }
-      this.listener.newMessage(message);
-    } while(this.active);
-  }
+	private async readLoop(): Promise<void> {
+		let message: Message;
+		do {
+			message = await this.read();
+			if (this.options.debug) {
+				console.log('<<<', message);
+			}
+			this.listener.newMessage(message);
+		} while (this.active);
+	}
 
-  private async readHeader(): Promise<MessageHeader> {
-    const response = await this.transport.read(24);
-    return MessageHeader.parse(response, this.options.useChecksum);
-  }
+	private async readHeader(): Promise<MessageHeader> {
+		const response = await this.transport.read(24);
+		return MessageHeader.parse(response, this.options.useChecksum);
+	}
 
-  private async read(): Promise<Message> {
-    const header = await this.readHeader();
-    let receivedData;
-    switch (header.cmd) {
-      default: {
-        if (header.length > 0) {
-          receivedData = await this.transport.read(header.length);
-        }
-      }
-    }
-    const message = new Message(header, receivedData);
-    return message;
-  }
+	private async read(): Promise<Message> {
+		const header = await this.readHeader();
+		let receivedData;
+		switch (header.cmd) {
+			default: {
+				if (header.length > 0) {
+					receivedData = await this.transport.read(header.length);
+				}
+			}
+		}
+		const message = new Message(header, receivedData);
+		return message;
+	}
 
-  close(): void {
-    this.active = false;
-  }
+	close(): void {
+		this.active = false;
+	}
 
-  async write(m: Message): Promise<void> {
-    if (this.options.debug) {
-      console.log('>>>', m);
-    }
-    const data = m.header.toDataView();
-    await this.transport.write(data.buffer);
-    if (m.data) {
-      await this.transport.write(m.data.buffer);
-    }
-  }
+	async write(m: Message): Promise<void> {
+		if (this.options.debug) {
+			console.log('>>>', m);
+		}
+		const data = m.header.toDataView();
+		await this.transport.write(data.buffer);
+		if (m.data) {
+			await this.transport.write(m.data.buffer);
+		}
+	}
 }

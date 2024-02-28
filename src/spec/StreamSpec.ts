@@ -14,29 +14,29 @@
  *  limitations under the License.
  */
 
-import {AdbClient} from '../lib/AdbClient';
-import {MockKeyStore} from './mock/MockKeyStore';
-import {Options} from '../lib/Options';
-import {MockTransport} from './mock/MockTransport';
-import {Stream} from '../lib/Stream';
+import { AdbClient } from '../lib/AdbClient';
+import { MockKeyStore } from './mock/MockKeyStore';
+import { Options } from '../lib/Options';
+import { MockTransport } from './mock/MockTransport';
+import { Stream } from '../lib/Stream';
 
 const options = {
-  debug: false,
-  dump: false,
-  useChecksum: false,
-  keySize: 2048,
+	debug: false,
+	dump: false,
+	useChecksum: false,
+	keySize: 2048,
 } as Options;
 
 describe('Stream', () => {
-  describe('#open', () => {
-    it('Opens a stream', async () => {
-      const mockTransport = new MockTransport();
-      await mockTransport.pushFromFile('src/spec/data/messages/stream/open.json');
-      const adbClient = new AdbClient(mockTransport, options, new MockKeyStore());
-      const stream = await Stream.open(adbClient, 'test:', options);
-      expect(stream.localId).toBe(1);
-      expect(stream.remoteId).toBe(34); // Defined in open.json
-      expect(stream.service).toBe('test:');
-    });
-  });
+	describe('#open', () => {
+		it('Opens a stream', async () => {
+			const mockTransport = new MockTransport();
+			await mockTransport.pushFromFile('src/spec/data/messages/stream/open.json');
+			const adbClient = new AdbClient(mockTransport, options, new MockKeyStore());
+			const stream = await Stream.open(adbClient, 'test:', options);
+			expect(stream.localId).toBe(1);
+			expect(stream.remoteId).toBe(34); // Defined in open.json
+			expect(stream.service).toBe('test:');
+		});
+	});
 });

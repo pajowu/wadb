@@ -14,14 +14,14 @@
  *  limitations under the License.
  */
 
-import {KeyStore} from '../../lib/KeyStore';
+import { KeyStore } from '../../lib/KeyStore';
 
 export class MockKeyStore implements KeyStore {
-  loadKeys(): Promise<CryptoKeyPair[]> {
-    return Promise.resolve([]);
-  }
+	loadKeys(): Promise<CryptoKeyPair[]> {
+		return Promise.resolve([]);
+	}
 
-  saveKey(): Promise<void> {
-    return Promise.resolve();
-  };
+	saveKey(): Promise<void> {
+		return Promise.resolve();
+	}
 }
