@@ -9,7 +9,8 @@
 		"lint-fix": "eslint \"src/**/*.ts\" --fix",
 		"build": "tsc -p .",
 		"test": "tsc -p . && jasmine --config=jasmine.json",
-		"format": "prettier -w 'src/**/*.(ts|tsx)'"
+		"format": "prettier -w 'src/**/*.(ts|tsx)'",
+		"postinstall": "tsc -p ."
 	},
 	"files": [
 		"dist/lib",
@@ -19,15 +20,17 @@
 	"author": "André Cipriani Bandarra",
 	"license": "Apache-2.0",
 	"devDependencies": {
-		"@types/jasmine": "^3.5.10",
-		"@types/node": "^13.13.2",
-		"@types/w3c-web-usb": "^1.0.4",
 		"@typescript-eslint/eslint-plugin": "^6.1.0",
 		"@typescript-eslint/parser": "^6.1.0",
 		"eslint-config-prettier": "^8.6.0",
 		"prettier": "^3.0.0",
 		"eslint": "^8.35.0",
-		"jasmine": "^3.5.0",
-		"typescript": "^3.8.3"
+		"jasmine": "^3.5.0"
+	},
+	"dependencies": {
+		"typescript": "^3.8.3",
+		"@types/jasmine": "^3.5.10",
+		"@types/node": "^13.13.2",
+		"@types/w3c-web-usb": "^1.0.4"
 	}
 }
