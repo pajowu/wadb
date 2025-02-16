@@ -52,9 +52,10 @@ export class Stream {
 	}
 
 	consumeMessage(msg: Message): boolean {
+		// cmd-check for arg0 === 0 needed because of https://android.googlesource.com/platform/packages/modules/adb/+/5e9f9f41a062fc2065a95af7b15f59c42eea243a/adb.cpp#568
 		if (
-			msg.header.arg0 === 0 ||
-			msg.header.arg0 !== this.remoteId ||
+			(msg.header.arg0 === 0 && msg.header.cmd !== "CLSE") ||
+			(msg.header.arg0 !== 0 && msg.header.arg0 !== this.remoteId) ||
 			msg.header.arg1 === 0 ||
 			msg.header.arg1 !== this.localId
 		) {

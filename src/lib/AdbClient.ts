@@ -182,6 +182,7 @@ export class AdbClient implements MessageListener {
 				break;
 			} else {
 				response += cmd.dataAsString();
+				await stream.write("OKAY");
 			}
 		}
 		await stream.close();
