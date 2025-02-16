@@ -110,35 +110,45 @@ export class Stream {
 		let syncFrame;
 		let fileDataMessage;
 		const okayMessage = this.newMessage('OKAY');
-
+		let buffer = new Uint8Array();
 		do {
-			// header frame
-			fileDataMessage = await this.read();
-			await this.client.sendMessage(okayMessage);
-			syncFrame = SyncFrame.fromDataView(new DataView(fileDataMessage.data!.buffer.slice(0, 8)));
+			// ensure we have enough data in the buffer to read the sync message header
+			while (buffer.length < 8) {
+				fileDataMessage = await this.read();
+				await this.client.sendMessage(okayMessage);
+				const newLength = buffer.length + fileDataMessage.data!.byteLength;
+				const newBuffer = new Uint8Array(newLength);
+				newBuffer.set(buffer, 0);
+				newBuffer.set(new Uint8Array(fileDataMessage.data!.buffer), buffer.length);
+				buffer = newBuffer
+			}
 
+			// header frame
+			syncFrame = SyncFrame.fromDataView(new DataView(buffer.buffer, 0, 8));
+			buffer = buffer.slice(8);
 			if (syncFrame.cmd === 'DATA') {
 				// Normal case:
-				// Device first sends us a DATA command with the size of the current chunk and possible the first bytes
-				let chunkLength = syncFrame.byteLength;
-				let chunk = new Uint8Array(fileDataMessage.data!.buffer.slice(8));
+				// Device first sends us a DATA command with the size of the current chunk
 
-				// Receive data until chunk was fully sent
-				while (chunk.byteLength < chunkLength) {
-					let fileDataMessage = await this.read();
+				const chunkLength = syncFrame.byteLength;
+				// fill the buffer until we have `chunkLength` bytes
+				while (buffer.length < chunkLength) {
+					fileDataMessage = await this.read();
 					await this.client.sendMessage(okayMessage);
-					// Join both arrays
-					const newLength = chunk.byteLength + fileDataMessage.data!.byteLength;
+					const newLength = buffer.length + fileDataMessage.data!.byteLength;
 					const newBuffer = new Uint8Array(newLength);
-					newBuffer.set(chunk, 0);
-					newBuffer.set(new Uint8Array(fileDataMessage.data!.buffer), chunk.byteLength);
-					chunk = newBuffer;
+					newBuffer.set(buffer, 0);
+					newBuffer.set(new Uint8Array(fileDataMessage.data!.buffer), buffer.length);
+					buffer = newBuffer
 				}
+
+				const chunk = new Uint8Array(buffer.slice(0, chunkLength));
+				buffer = buffer.slice(chunkLength);
 
 				yield chunk;
 			} else if (syncFrame.cmd === 'FAIL') {
 				// Error case: Device sends failure message
-				let errorMessage = await this.read();
+				const errorMessage = await this.read();
 				await this.client.sendMessage(okayMessage);
 				throw new PullError(errorMessage.dataAsString() || '');
 			} else if (syncFrame.cmd !== 'DONE') {
