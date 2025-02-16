@@ -85,7 +85,7 @@ export class AsyncBlockingQueue<T> {
 
 	private add(): void {
 		const promise = new Promise<T>((resolve) => {
-			this.resolverQueue.enqueue(resolve);
+			this.resolverQueue.enqueue(resolve as Resolver<T>);
 		});
 		this.promiseQueue.enqueue(promise);
 	}
