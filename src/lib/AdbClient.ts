@@ -24,6 +24,7 @@ import { Stream } from './Stream';
 import { Shell } from './Shell';
 import { AsyncBlockingQueue } from './Queues';
 import { Framebuffer } from './Framebuffer';
+import { ShellV2 } from './ShellV2';
 
 const VERSION = 0x01000000;
 const VERSION_NO_CHECKSUM = 0x01000001;
@@ -104,57 +105,6 @@ export class AdbClient implements MessageListener {
 		this.messageChannel.close();
 	}
 
-	async shellV2(command: string): Promise<{ stdout: string; stderr: string; exit: number }> {
-		const stream = await Stream.open(this, `shell,v2,raw:${command}`, this.options);
-		let stdout = '';
-		let stderr = '';
-		let exit = -1;
-		type ShellV2Packet = { cmd: number; length: number; data: ArrayBuffer };
-		function parsePackages(data: ArrayBuffer): ShellV2Packet[] {
-			const pkts: ShellV2Packet[] = [];
-			while (data.byteLength >= 5) {
-				const view = new DataView(data);
-				const packetType = view.getUint8(0);
-				const packetLength = view.getUint32(1, true);
-				console.log('type, length', packetType, packetLength);
-				const packetData = data.slice(5, packetLength + 5);
-				data = data.slice(packetLength + 5);
-				pkts.push({ cmd: packetType, length: packetLength, data: packetData });
-			}
-			return pkts;
-		}
-		while (true) {
-			const cmd = await stream.read();
-			if (cmd.header.cmd == 'CLSE') {
-				break;
-			} else {
-				const textDecoder = new TextDecoder();
-				const packets = cmd.data ? parsePackages(cmd.data.buffer) : [];
-				console.log(packets);
-				for (const pkt of packets) {
-					switch (pkt.cmd) {
-						case 0:
-							break;
-						case 1:
-							stdout += textDecoder.decode(pkt.data);
-							break;
-						case 2:
-							stderr += textDecoder.decode(pkt.data);
-							break;
-						case 3:
-							exit = new Uint8Array(pkt.data)[0];
-							break;
-						default:
-							console.warn('unknown cmd', pkt);
-					}
-					await stream.write('OKAY');
-				}
-			}
-		}
-		await stream.close();
-		return { stdout, stderr, exit };
-	}
-
 	async backup(command: string): Promise<Blob> {
 		const stream = await Stream.open(this, `backup:${command}`, this.options);
 		const data = [];
@@ -188,6 +138,12 @@ export class AdbClient implements MessageListener {
 		await stream.close();
 		return response;
 	}
+
+	async shellV2(command: string): Promise<ShellV2> {
+		const stream = await Stream.open(this, `shell,v2,raw:${command}`, this.options);
+		return new ShellV2(stream);
+	}
+
 
 	async framebuffer(): Promise<Framebuffer> {
 		return Framebuffer.create(this, this.options);
