@@ -105,22 +105,25 @@ export class AdbClient implements MessageListener {
 		this.messageChannel.close();
 	}
 
-	async backup(command: string): Promise<Blob> {
+	async backup(command: string): Promise<ReadableStream> {
 		const stream = await Stream.open(this, `backup:${command}`, this.options);
-		const data = [];
-		while (true) {
-			const cmd = await stream.read();
-			if (cmd.header.cmd == 'CLSE') {
-				break;
-			} else {
-				if (cmd?.data?.buffer) {
-					data.push(cmd.data.buffer);
+		return new ReadableStream({
+			async start(controller) {
+				while (true) {
+					const cmd = await stream.read();
+					if (cmd.header.cmd == 'CLSE') {
+						break
+					} else if (cmd.header.cmd == 'WRTE') {
+						if (cmd?.data?.buffer) {
+							controller.enqueue(new Uint8Array(cmd.data.buffer));
+						}
+						await stream.write('OKAY');
+					}
 				}
-				await stream.write('OKAY');
+				await stream.close();
+				controller.close()
 			}
-		}
-		await stream.close();
-		return new Blob(data);
+		})
 	}
 
 	async shell(command: string): Promise<string> {
@@ -160,15 +163,12 @@ export class AdbClient implements MessageListener {
 
 	async pull(filename: string): Promise<Blob> {
 		const syncStream = await this.sync();
-		const result = await syncStream.pull(filename);
-		await syncStream.close();
-		return result;
+		return await syncStream.pull(filename);
 	}
 
-	async *pullGenerator(filename: string): AsyncGenerator<ArrayBuffer> {
+	async pullStream(filename: string): Promise<ReadableStream<Uint8Array>> {
 		const syncStream = await this.sync();
-		yield* syncStream.pullGenerator(filename);
-		await syncStream.close();
+		return await syncStream.pullStream(filename);
 	}
 
 	private async doAuth(authResponse: Message): Promise<Message> {
