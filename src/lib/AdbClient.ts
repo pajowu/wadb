@@ -106,9 +106,20 @@ export class AdbClient implements MessageListener {
 
   async shell(command: string): Promise<string> {
     const stream = await Stream.open(this, `shell:${command}`, this.options);
-    const response = await stream.read();
-    await stream.close();
-    return response.dataAsString() || '';
+    const textDecoder = new TextDecoder();
+
+    let message;
+    let response = "";
+    do {
+      message = await stream.read();
+
+      if (message.header.cmd === 'WRTE') {
+        stream.write('OKAY');
+        response += textDecoder.decode(message.data!);
+      }
+    } while (message.header.cmd !== "CLSE");
+
+    return response;
   }
 
   async framebuffer(): Promise<Framebuffer> {
