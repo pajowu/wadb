@@ -43,7 +43,7 @@ export class AdbClient implements MessageListener {
    * @param {Transport} transport the transport layer.
    */
   constructor(
-    readonly transport: Transport,
+    readonly transport: Transport<unknown>,
     readonly options: Options,
     readonly keyStore: KeyStore,) {
       this.messageChannel = new MessageChannel(transport, options, this);

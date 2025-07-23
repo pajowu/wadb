@@ -31,7 +31,7 @@ interface DeviceMatch {
 /**
  * An implementation of {@link Transport} using WebUSB as the tranport layer.
  */
-export class WebUsbTransport implements Transport {
+export class WebUsbTransport implements Transport<USBDevice> {
   private constructor(
     readonly device: USBDevice,
     readonly match: DeviceMatch,
